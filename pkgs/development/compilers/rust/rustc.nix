@@ -1,4 +1,4 @@
-{ stdenv, targetPackages
+{ stdenv, targetPackages, buildPackages
 , fetchurl, fetchgit, fetchzip, file, python2, tzdata, ps
 , llvm, jemalloc, ncurses, darwin, rustPlatform, git, cmake, curl
 , which, libffi, gdb
@@ -12,7 +12,7 @@
 , targetToolchains
 , doCheck ? true
 , broken ? false
-, buildPlatform, hostPlatform
+, buildPlatform, hostPlatform, targetPlatform
 } @ args:
 
 let
@@ -21,7 +21,36 @@ let
 
   llvmShared = llvm.override { enableSharedLibraries = true; };
 
-  target = builtins.replaceStrings [" "] [","] (builtins.toString targets);
+  fullTargets = targets ++ [ targetPlatform.config ];
+
+  target = builtins.replaceStrings [" "] [","] (builtins.toString fullTargets);
+
+  hostCC =
+  if hostPlatform == buildPlatform then
+    "cc"
+  else
+    "${hostPlatform.config}-cc";
+  targetCC =
+  if targetPlatform == buildPlatform then
+    "cc"
+  else
+    "${targetPlatform.config}-cc";
+  targetAR =
+  if targetPlatform == buildPlatform then
+    "ar"
+  else
+    "${targetPlatform.config}-ar";
+
+  hostFlags =
+  [ "--set=target.${buildPlatform.config}.linker=${buildPackages.stdenv.cc}/bin/${hostCC}"]
+  ++ [ "--set=target.${buildPlatform.config}.cc=${buildPackages.stdenv.cc}/bin/${hostCC}"]
+  ++ [ "--set=target.${buildPlatform.config}.cxx=${buildPackages.stdenv.cc}/bin/c++"]
+  ++ [ "--set=target.${buildPlatform.config}.ar=${buildPackages.stdenv.cc.bintools.bintools}/bin/ar"];
+
+  targetFlags =
+  [ "--set=target.${targetPlatform.config}.linker=${targetPackages.stdenv.cc}/bin/${targetCC}"]
+  ++ [ "--set=target.${targetPlatform.config}.cc=${targetPackages.stdenv.cc}/bin/${targetCC}"]
+  ++ [ "--set=target.${targetPlatform.config}.ar=${targetPackages.stdenv.cc.bintools.bintools}/bin/${targetAR}"];
 in
 
 stdenv.mkDerivation {
@@ -57,10 +86,11 @@ stdenv.mkDerivation {
   configureFlags = configureFlags
                 ++ [ "--enable-local-rust" "--local-rust-root=${rustPlatform.rust.rustc}" "--enable-rpath" ]
                 ++ [ "--enable-vendor" ]
+                ++ [ "--build=${buildPlatform.config}" "--host=${hostPlatform.config}" "--target=${target}" ]
+                ++ hostFlags
+                ++ targetFlags
                 # ++ [ "--jemalloc-root=${jemalloc}/lib"
-                ++ [ "--default-linker=${targetPackages.stdenv.cc}/bin/cc" ]
                 ++ optional (!forceBundledLLVM) [ "--enable-llvm-link-shared" ]
-                ++ optional (targets != []) "--target=${target}"
                 ++ optional (!forceBundledLLVM) "--llvm-root=${llvmShared}";
 
   # The boostrap.py will generated a Makefile that then executes the build.
@@ -68,6 +98,13 @@ stdenv.mkDerivation {
   # to the bootstrap builder.
   postConfigure = ''
     substituteInPlace Makefile --replace 'BOOTSTRAP_ARGS :=' 'BOOTSTRAP_ARGS := --jobs $(NIX_BUILD_CORES)'
+  '';
+
+  preBuild = ''
+    echo ${builtins.toString hostFlags}
+    echo ${builtins.toString targetFlags}
+    echo config.toml for target ${targetPlatform.config}:
+    cat config.toml
   '';
 
   patches = patches ++ targetPatches;
@@ -117,6 +154,8 @@ stdenv.mkDerivation {
     # error: No such file or directory
     rm -v src/test/run-pass/issue-45731.rs
 
+    rm -v src/test/codegen/issue-45466.rs || true
+
     # Disable tests that fail when sandboxing is enabled.
     substituteInPlace src/libstd/sys/unix/ext/net.rs \
         --replace '#[test]' '#[test] #[ignore]'
@@ -159,7 +198,7 @@ stdenv.mkDerivation {
     sed -i '28s/home_dir().is_some()/true/' ./src/test/run-pass/env-home-dir.rs
   '';
 
-  inherit doCheck;
+  doCheck = doCheck && targetPlatform == hostPlatform;
 
   configurePlatforms = [];
 
