@@ -1,4 +1,4 @@
-{ callPackage, fetchurl, stdenv, path, cacert, git, rust, cargo-vendor }:
+{ callPackage, fetchurl, stdenv, path, cacert, git, rust, cargo-vendor, hostPlatform }:
 let
   fetchcargo = import ./fetchcargo.nix {
     inherit stdenv cacert git rust cargo-vendor;
@@ -13,8 +13,8 @@ in
 , cargoUpdateHook ? ""
 , cargoDepsHook ? ""
 , cargoBuildFlags ? []
-
 , cargoVendorDir ? null
+, targetConfig ? hostPlatform.config
 , ... } @ args:
 
 assert cargoVendorDir == null -> cargoSha256 != "unset";
@@ -74,8 +74,9 @@ in stdenv.mkDerivation (args // {
 
   buildPhase = with builtins; args.buildPhase or ''
     runHook preBuild
-    echo "Running cargo build --release ${concatStringsSep " " cargoBuildFlags}"
-    cargo build --release --frozen ${concatStringsSep " " cargoBuildFlags}
+    echo we are using `command -v cargo` as cargo
+    echo "Running cargo build --release ${concatStringsSep " " cargoBuildFlags} --target ${targetConfig}"
+    cargo build --release --frozen ${concatStringsSep " " cargoBuildFlags} --target ${targetConfig}
     runHook postBuild
   '';
 
@@ -86,12 +87,12 @@ in stdenv.mkDerivation (args // {
     runHook postCheck
   '';
 
-  doCheck = args.doCheck or true;
+  doCheck = args.doCheck or targetConfig == hostPlatform.config;
 
   installPhase = args.installPhase or ''
     runHook preInstall
     mkdir -p $out/bin
-    find target/release -maxdepth 1 -executable -type f -exec cp "{}" $out/bin \;
+    find target/${targetConfig}/release -maxdepth 1 -executable -type f -exec cp "{}" $out/bin \;
     runHook postInstall
   '';
 
