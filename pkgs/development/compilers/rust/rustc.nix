@@ -84,7 +84,7 @@ stdenv.mkDerivation {
   # We need rust to build rust. If we don't provide it, configure will try to download it.
   # Reference: https://github.com/rust-lang/rust/blob/master/src/bootstrap/configure.py
   configureFlags = configureFlags
-                ++ [ "--enable-local-rust" "--local-rust-root=${rustPlatform.rust.rustc}" "--enable-rpath" ]
+                # ++ [ "--enable-local-rust" "--local-rust-root=${rustPlatform.rust.rustc}" "--enable-rpath" ]
                 ++ [ "--enable-vendor" ]
                 ++ [ "--build=${buildPlatform.config}" "--host=${hostPlatform.config}" "--target=${target}" ]
                 ++ hostFlags

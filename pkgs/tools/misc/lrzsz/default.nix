@@ -12,6 +12,8 @@ stdenv.mkDerivation rec {
 
   configureFlags = [ "--program-transform-name=s/^l//" ];
 
+  makeFlags = [ "AR:=$(AR)" ];
+
   meta = with stdenv.lib; {
     homepage = https://ohse.de/uwe/software/lrzsz.html;
     description = "Communication package providing the XMODEM, YMODEM ZMODEM file transfer protocols";
