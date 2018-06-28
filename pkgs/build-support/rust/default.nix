@@ -10,6 +10,7 @@ in
 , sourceRoot ? null
 , logLevel ? ""
 , buildInputs ? []
+, nativeBuildInputs ? []
 , cargoUpdateHook ? ""
 , cargoDepsHook ? ""
 , cargoBuildFlags ? []
@@ -44,7 +45,11 @@ in stdenv.mkDerivation (args // {
 
   patchRegistryDeps = ./patch-registry-deps;
 
-  buildInputs = [ cacert git rust.cargo rust.rustc ] ++ buildInputs;
+  buildInputs = [ cacert ] ++ buildInputs;
+
+  nativeBuildInputs =
+  [ cacert git rust.cargo rust.rustc ]
+  ++ nativeBuildInputs;
 
   configurePhase = args.configurePhase or ''
     runHook preConfigure
