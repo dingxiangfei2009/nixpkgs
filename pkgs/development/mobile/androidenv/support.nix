@@ -7,12 +7,12 @@ stdenv.mkDerivation rec {
     url = "https://dl.google.com/android/repository/support_r${version}.zip";
     sha1 = "azl7hgps1k98kmbhw45wwbrc86y1n4j1";
   };
-  
+
   buildCommand = ''
     mkdir -p $out
     cd $out
     unzip $src
   '';
-  
+
   buildInputs = [ unzip ];
 }
