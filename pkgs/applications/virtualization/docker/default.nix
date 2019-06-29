@@ -1,4 +1,4 @@
-{ stdenv, lib, fetchFromGitHub, makeWrapper, removeReferencesTo, pkgconfig
+{ stdenv, buildPackages, lib, fetchFromGitHub, makeWrapper, removeReferencesTo, pkgconfig
 , go-md2man, go, containerd, runc, docker-proxy, tini, libtool
 , sqlite, iproute, lvm2, systemd
 , btrfs-progs, iptables, e2fsprogs, xz, utillinux, xfsprogs
@@ -85,12 +85,24 @@ rec {
     # Optimizations break compilation of libseccomp c bindings
     hardeningDisable = [ "fortify" ];
 
-    nativeBuildInputs = [ pkgconfig ];
-    buildInputs = [
-      makeWrapper removeReferencesTo go-md2man go libtool
-    ] ++ optionals (stdenv.isLinux) [
+    nativeBuildInputs = [
+      pkgconfig
+      makeWrapper
+      removeReferencesTo
+      go-md2man
+      go
+      libtool
+    ];
+    buildInputs = optionals (stdenv.isLinux) [
       sqlite lvm2 btrfs-progs systemd libseccomp
     ];
+
+    inherit (go) GOOS GOARCH GO386 CGO_ENABLED;
+
+    GOHOSTARCH = go.GOHOSTARCH or null;
+    GOHOSTOS = go.GOHOSTOS or null;
+
+    GOARM = toString (stdenv.lib.intersectLists [(stdenv.hostPlatform.parsed.cpu.version or "")] ["5" "6" "7"]);
 
     dontStrip = true;
 
@@ -163,6 +175,9 @@ rec {
       echo "Generate man pages from cobra"
       cd ./components/cli
       mkdir -p ./man/man1
+      # CC=${buildPackages.stdenv.cc}/${buildPackages.stdenv.cc.targetPrefix}cc \
+      GOOS=${buildPackages.buildPackages.go.GOOS} \
+      GOARCH=${buildPackages.buildPackages.go.GOARCH} \
       go build -o ./gen-manpages github.com/docker/cli/man
       ./gen-manpages --root . --target ./man/man1
 
@@ -183,7 +198,7 @@ rec {
     '';
 
     preFixup = ''
-      find $out -type f -exec remove-references-to -t ${go} -t ${stdenv.cc.cc} '{}' +
+      find $out -type f -exec remove-references-to -t ${go.nativeDrv or go} -t ${stdenv.cc.cc} '{}' +
     '' + optionalString (stdenv.isLinux) ''
       find $out -type f -exec remove-references-to -t ${stdenv.glibc.dev} '{}' +
     '';
